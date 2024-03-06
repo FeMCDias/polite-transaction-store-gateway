@@ -1,36 +1,22 @@
 spring:
   application:
     name: store-gateway
+
   cloud:
-    discovery:
-      locator:
-        enabled: true
-    gateway:
-      routes:
+    routes:
+      - id: store-auth
+        uri: lb://store-auth
+        predicates:
+          - Path=/auth/**
+        
+      - id: insper
+        uri: https://insper.edu.br
+        predicates:
+          - Path=/
 
-        - id: auth
-          uri: lb://store-auth
-          predicates:
-            - Path=/auth/**
-
-        # - id: product
-        #   uri: lb://store-product
-        #   predicates:
-        #     - Path=/product/**
-
-      default-filters:
-        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
-      globalcors:
-        corsConfigurations:
-          '[/**]':
-            allowedOrigins: "http://localhost"
-            allowedHeaders: "*"
-            allowedMethods:
-            - GET
-            - POST
-
-api:
-  endpoints:
-    open: >
-      POST /auth/register/,
-      POST /auth/login/
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: $(EUREKA_URI:http://localhost:8761/eureka/)
