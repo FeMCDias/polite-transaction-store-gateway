@@ -1,55 +1,82 @@
 package politetransaction.store.gateway.security;
 
-import java.security.Provider.Service;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.integration.IntegrationProperties.RSocket.Server;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 
+import politetransaction.store.auth.SolveIn;
+import politetransaction.store.auth.SolveOut;
 import reactor.core.publisher.Mono;
 
+@Component
 public class AuthenticationFilter implements GlobalFilter {
 
     @Autowired
-    private final RouterValidator routerValidator;
+    private RouterValidator routerValidator;
 
     @Autowired
-    private WebClient webClient;
+    private WebClient.Builder webClient;
 
+    @SuppressWarnings("null")
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         final ServerHttpRequest request = exchange.getRequest();
-
+        // System.out.println("AQUIIIII -> " +  (routerValidator.openApiEndpoints));
         // verificar se a rota eh segura
         if (!routerValidator.isSecured.test(request)) {
             return chain.filter(exchange);
         }
+        // verificar se o cabecalho de autenticacao esta presente
         if (isAuthMissing(request)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing authorization header.");
         }
-        final String[] parts = request.getHeaders().get("Authorization").get(0).split(" ");
-        if (parts.length != 2 || !"Bearer".equals(parts[0])) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid authorization header");
+        final String[] parts = getAuthHeader(request).split(" ");
+        if (parts.length != 2 || !parts[0].equals("Bearer")) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid authorization header.");
         }
-
-        // TODO: verificar se o token eh valido, senao retornar 401
-        // TODO: verificar se o cabecalho de autorizacao esta presente
-        // TODO: atualizar o cabecalho de autorizacao
-        return null;
+        final String token = parts[1];
+        return webClient
+            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+            .build()
+            .post()
+            .uri("http://store-auth/auth/solve")
+            .bodyValue(SolveIn.builder().token(token).build())
+            .retrieve()
+            .toEntity(SolveOut.class)
+            .flatMap(response -> {
+                if (response != null && response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                    // atualizar o cabecalho da requisicao com o usuario logado
+                    updateRequestWithUser(exchange, response.getBody());
+                    return chain.filter(exchange);
+                } else {
+                    throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid token.");
+                }
+            });
     }
 
     private boolean isAuthMissing(ServerHttpRequest request) {
         return !request.getHeaders().containsKey("Authorization");
     }
 
-    public AuthenticationFilter(RouterValidator routerValidator) {
-        this.routerValidator = routerValidator;
+    private String getAuthHeader(ServerHttpRequest request) {
+        return request.getHeaders().getOrEmpty("Authorization").get(0);
+    }
+
+    private void updateRequestWithUser(ServerWebExchange exchange, SolveOut user) {
+        exchange.getRequest().mutate()
+            .header("id-user", user.id())
+            .header("name-user", user.name())
+            .header("role-user", user.role())
+            .build();
     }
 
 }

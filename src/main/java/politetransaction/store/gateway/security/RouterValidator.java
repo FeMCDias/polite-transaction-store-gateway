@@ -11,18 +11,20 @@ import org.springframework.stereotype.Component;
 public class RouterValidator {
 
     @Value("${api.endpoints.open}")
-    private List<String> openApiEndpoints;
+    public List<String> openApiEndpoints;
 
-    final public Predicate<ServerHttpRequest> isSecured = 
+    final public Predicate<ServerHttpRequest> isSecured =
         request -> openApiEndpoints
             .stream()
             .noneMatch(uri -> {
-            String[] parts = uri.replaceAll("[^a-zA-Z0-9//]", "").split(" ");
-            if (parts.length != 2) {return false;}
-            final String method = parts[0];
-            final String path = parts[1];
-            return request.getMethod().toString().equals(method) || method.equals("ANY")
-                && request.getURI().getPath().contains(path);
+                String[] parts = uri.replaceAll("[^a-zA-Z0-9// ]", "").split(" ");
+                if (parts.length != 2) return false;
+                final String method = parts[0];
+                final String path = parts[1];
+                // System.out.println("Method : [" + method + "] Path: [" + path + "]");
+                // System.out.println("Request: [" + request.getMethod().toString() + "] Path: [" + request.getURI().getPath() + "]");
+                return (request.getMethod().toString().equalsIgnoreCase(method) || method.equalsIgnoreCase("ANY"))
+                    && request.getURI().getPath().contains(path);
             });
-    
+
 }
