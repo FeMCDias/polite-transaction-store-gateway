@@ -3,21 +3,31 @@ spring:
     name: store-gateway
 
   cloud:
-    routes:
-      - id: store-auth
-        uri: lb://store-auth
-        predicates:
-          - Path=/auth/**
+    discovery:
+        locator:
+          enabled: true
+    gateway:
+      routes:
+        - id: store-auth
+          uri: lb://store-auth
+          predicates:
+            - Path=/auth/**
 
-      - id: store-account
-        uri: lb://store-account
-        predicates:
-          - Path=/account/**
-        
-      - id: insper
-        uri: https://insper.edu.br
-        predicates:
-          - Path=/
+        - id: store-account
+          uri: lb://store-account
+          predicates:
+            - Path=/account/**
+          
+        - id: insper
+          uri: https://insper.edu.br
+          predicates:
+            - Path=/
+management:
+  endpoints:
+    web:
+      base-path: /gateway/actuator
+      exposure:
+        include: [ 'prometheus' ]
 
 eureka:
   client:
@@ -29,5 +39,7 @@ eureka:
 api:
   endpoints:
     open: >
-      POST /auth/login
-      POST /auth/register
+      POST /auth/register,
+      POST /auth/login,
+      ANY /auth/actuator,
+      ANY /accounts/actuator
